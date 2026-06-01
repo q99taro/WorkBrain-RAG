@@ -76,12 +76,23 @@ def analyze_intent(user_input: str) -> dict:
 def generate_summary(user_query: str, logs: list[dict]) -> str:
     logs_context = "\n".join([f"- [{log.get('event_time', 'unknown')}] {log.get('content')}" for log in logs])
     
-    prompt = f"""你是一個專業的工作日誌分析助手。
+    prompt = f"""你是一個專業且精簡的工作日誌助手。
 使用者想查詢："{user_query}"
-以下是從資料庫中檢索到的相關工作紀錄：
+以下是相關的工作紀錄：
 {logs_context}
 
-請根據以上紀錄，為使用者總結他們的工作內容。如果有多筆紀錄，請條列式呈現，並保持口吻專業且親切。
+請根據紀錄，用最精簡的口吻回答。
+規則：
+1. 如果是列出某天的紀錄，格式為：「你在 [日期] [星期] 做了這些事情：」後接條列項目。
+2. 如果是回答特定問題，格式為：「你是在 [日期] [星期] 針對 [對象] 做了 [動作] 的優化/處理。」
+3. 除非使用者詢問，否則不要輸出多餘的問候語。
+
+回答範例：
+你在 6/1 星期一 做了這些事情：
+1. 修正登入 Bug
+2. 優化 Embedding 檢索邏輯
+
+你是在 3/12 星期四 針對 Postgres 連線池做了 NullPool 的優化。
 """
     
     response = client.models.generate_content(
