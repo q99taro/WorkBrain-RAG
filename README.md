@@ -32,11 +32,7 @@ pinned: false
 ---
 ## 📸 實測截圖 (Product Screenshots)
 
-> **在此處貼上您的 Github 圖片網址或是將圖片放入 assets 資料夾中引用**
-
-| 智慧日誌分析與自動拆分 | 語意特化檢索與查詢重寫 |
-| :---: | :---: |
-| ![功能截圖 1](https://via.placeholder.com/400x600?text=Ingestion+Demo) | ![功能截圖 2](https://via.placeholder.com/400x600?text=Query+Demo) |
+<img width="590" height="1278" alt="IMG_9563" src="https://github.com/user-attachments/assets/a511450a-5c05-4591-be61-ef8fb3365e36" />
 
 ---
 ## 🚀 系統架構 (Architecture)
