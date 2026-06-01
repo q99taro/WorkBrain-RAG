@@ -60,14 +60,39 @@ def async_rag_workflow(user_id: str, user_text: str):
             query_end = intent_data.get("query_end_time")
 
         if intent == "log":
-            vector = embedding_service.get_embedding(clean_content, is_query=False)
-            success = database_service.insert_log(
-                user_id=user_id,
-                content=clean_content,
-                embedding=vector,
-                event_time=event_time
-            )
-            reply_text = "✅ 已成功為您記錄工作項目。" if success else "❌ 記錄失敗，請檢查資料庫連線。"
+            # 1. 取得陣列，若沒有則使用空陣列作為防呆
+            clean_contents = intent_data.get("clean_contents", [])
+            event_time = intent_data.get("event_time")
+            
+            # 若規則判斷 (例如帶有 /log 前綴) 直接產出單一字串，需將其包裝為陣列
+            if isinstance(clean_contents, str):
+                clean_contents = [clean_contents]
+                
+            success_count = 0
+            fail_count = 0
+
+            # 2. 使用迴圈將每一筆獨立事件分別向量化並寫入
+            for content in clean_contents:
+                vector = embedding_service.get_embedding(content, is_query=False)
+                
+                success = database_service.insert_log(
+                    user_id=user_id,
+                    content=content,
+                    embedding=vector,
+                    event_time=event_time
+                )
+                
+                if success:
+                    success_count += 1
+                else:
+                    fail_count += 1
+
+            if fail_count == 0 and success_count > 0:
+                reply_text = f"✅ 已成功為您記錄 {success_count} 筆工作項目。"
+            elif success_count > 0 and fail_count > 0:
+                reply_text = f"⚠️ 部分記錄成功 ({success_count} 筆)，但有 {fail_count} 筆記錄失敗，請檢查資料庫狀態。"
+            else:
+                reply_text = "❌ 記錄失敗，請檢查資料庫連線。"
 
         elif intent == "query":
             vector = embedding_service.get_embedding(clean_content, is_query=True)
