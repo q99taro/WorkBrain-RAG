@@ -109,8 +109,8 @@ def async_rag_workflow(user_id: str, user_text: str):
                 query_embedding=vector,
                 start_time=query_start,
                 end_time=query_end,
-                top_k=30,
-                threshold=0.7
+                top_k=10,
+                threshold=0.6
             )
             
             if not retrieved_logs:
