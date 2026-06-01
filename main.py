@@ -52,14 +52,14 @@ def async_rag_workflow(user_id: str, user_text: str):
                 if not clean_contents:
                     clean_contents = [content_str]
                 event_time = intent_data.get("event_time")
-        elif user_text.startswith(("?", "？", "昨天", "上禮拜五")) or user_text.endswith(("什麼", "？", "?")):
+        elif user_text.strip() in ("?", "？"):
+            # 單純輸入問號時的預設快速查詢（只抓昨天的紀錄）
             intent = "query"
             now = datetime.now()
-            query_start = (now - timedelta(days=7)).isoformat()
-            query_end = now.isoformat()
-            clean_content = user_text.replace("?", "").replace("？", "").replace("什麼", "").strip()
-            if not clean_content:
-                clean_content = "我昨天做了什麼"
+            yesterday = now - timedelta(days=1)
+            query_start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+            query_end = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999).isoformat()
+            clean_content = "我昨天做了什麼"
         else:
             intent_data = llm_service.analyze_intent(user_text)
             intent = intent_data.get("intent")
