@@ -8,15 +8,32 @@ pinned: false
 ---
 
 # 🤖 Time-Aware Smart Work-Log RAG System
-> 專為個人工作日誌設計的智慧檢索與摘要系統，整合 LLM 意圖解析、語意分塊與非同步架構，解決真實 RAG 系統落地的常見痛點。
+
+> **個人工作日誌的 RAG 智慧解方：解決生產環境下的異步挑戰與語意精準度**  
+> 本專案提供端到端的智慧工作管理體驗：
+> - **語意化記錄**：隨手輸入工作內容，系統自動解析時間、拆分事件並向量化儲存。
+> - **精確溯源查詢**：不僅能回顧每日事項，更支援跨時間維度的快速檢索。例如詢問：*「我上週什麼時候對 AAA 功能做了調整？」*，系統將精確從數月紀錄中回顧特定功能的變更軌跡，大幅節省複盤與填寫週報的時間。
 
 [![Application Status](https://img.shields.io/badge/Hugging%20Face-Running-green)](https://huggingface.co/spaces/q9jotaro/W_Log)
-[![Backend Framework](https://img.shields.io/badge/Framework-FastAPI-009688)](https://fastapi.tiangolo.com/)
-[![Database](https://img.shields.io/badge/Database-Supabase%20%28pgvector%29-3ECF8E)](https://supabase.com/)
+[![FastAPI](https://img.shields.io/badge/Framework-FastAPI-009688)](https://fastapi.tiangolo.com/)
+[![Gemini 3.1](https://img.shields.io/badge/LLM-Gemini%203.1%20Flash%20Lite-blue)](https://deepmind.google/technologies/gemini/)
+[![Supabase](https://img.shields.io/badge/Database-Supabase%20%28pgvector%29-3ECF8E)](https://supabase.com/)
+
+---
+
+## 🎯 專案亮點 (Core Value)
+
+在開發基於 LINE Bot 的 RAG 系統時，常面臨 **Webhook 應答逾時 (4.75s)** 與 **語意稀釋 (Semantic Dilution)** 的挑戰。本專案透過以下工程實踐解決問題：
+
+1.  **非同步架構優化 (System Resilience)**: 採用 Thread Pool 異步處理耗時 RAG 流程，達成 100% 成功應答率並解決 LINE 單次應答限制。
+2.  **精準預分塊策略 (Pre-chunking Logic)**: 利用 LLM 結構化輸出功能，在 ingestion 階段即實現「按工作事件拆分」，解決複合語句引發的向量特徵稀釋。
+3.  **雲端生產環境安全機制**: 全面啟用 RLS 與僅限 Service Role 特權金鑰存取架構，示範企業級敏感資料保護標準。
+
+---
 
 ## 🚀 系統架構 (Architecture)
 
-本系統部署於 Hugging Face Spaces，透過 FastAPI 接收 LINE Webhook，並採用非同步工作流進行 RAG 檢索與生成。
+本系統部署於 **Hugging Face Spaces (Docker)**，展示了完整的混合路由設計：
 
 ```mermaid
 graph TD
@@ -54,28 +71,29 @@ graph TD
 
 ## 💡 核心工程優化 (Engineering Highlights)
 
-### 1. 非同步架構解耦 (Async / Thread Pool)
-為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，在收到 Webhook 請求後會馬上利用 `asyncio` 的執行緒池 (`run_in_executor`) 移至背景處理，隨後系統在幾毫秒內回傳 HTTP 200，達成 **0% 逾時失敗率**。
+### 1. 非同步架構解耦 (System Resilience)
+為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，本計畫採用異步處理策略。在接收 Webhook 請求後，利用 `asyncio` 的執行緒池 (`run_in_executor`) 將耗時的「意圖分析 ➡️ 向量化 ➡️ DB 檢索 ➡️ 總結生成」完整流程移至背景處理，隨後即刻回傳 HTTP 200。這確保了系統的高可用性，並透過 `Push Message` 主動告知使用者結果，徹底克服逾時問題。
 
-### 2. 多重事件自動拆分 (Pre-chunking Strategy)
-當使用者輸入複合事件（如：「早上研究架構優化，下午請假」）時，系統透過 LLM 解析為結構化 JSON 陣列，後端以迴圈為每個獨立事件單獨生成 Embedding。這徹底消除語意稀釋，提升檢索精準度。
+### 2. 精準預分塊策略 (Advanced Pre-chunking)
+面對使用者複合式的輸入（如：「早上研究架構，下午請假」），傳統 RAG 直接向量化會導致語意特徵互相干擾。本系統調用 LLM 的 **Structured Outputs**，在 Ingestion 階段即先進行語意拆分，確保每一筆寫入資料庫的向量都具備高純度，大幅提升後續 Cosine Similarity 檢索的精準度。
 
-### 3. 規則與語意混合路由 (Hybrid Router)
-針對輸入前綴帶有單純問號（如 `?` 或 `？`）的快速查詢，直接於本地端推算預設時間範圍（如查詢前一天紀錄），跳過不必要的 LLM 成本；而輸入一般文字或 `log` 等指令則交由 LLM 處理精確的時間與意圖切割。
+### 3. 安全性雲端實踐 (Cloud Security)
+本專案採用 Supabase **RLS (Row Level Security)** 預設封閉架構。透過 `REVOKE ALL ON ANON` 指令完全禁止前端直接存取，並限定 FastAPI 伺服器使用 `service_role` 特權金鑰進行操作，示範了如何保護敏感工作紀錄免於未經授權的存取風險。
 
 ---
 
 ## 📦 本地端開發指南 (Setup)
 
-### 1. 環境變數設定
-於專案根目錄建立 `.env` 檔案並填入金鑰：
+### 1. 環境變數設定 (Environment Variables)
+於專案根目錄建立 `.env` 檔案。**重要：由於安全性考量，請使用 `service_role` key 並妥善保管。**
 
 ```env
 LINE_CHANNEL_ACCESS_TOKEN=your_token
 LINE_CHANNEL_SECRET=your_secret
 GEMINI_API_KEY=your_key
 SUPABASE_URL=your_url
-SUPABASE_KEY=your_key
+# [安全性建議] 請使用 Supabase 的 service_role key
+SUPABASE_KEY=your_service_role_key
 ```
 ### 2. 啟動服務
 ```bash
@@ -134,7 +152,9 @@ BEGIN
 END;
 $$;
 
--- 賦予連線角色寫入與查詢權限
-GRANT SELECT, INSERT ON public.work_logs TO anon, authenticated, service_role;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+-- [安全性設定] 開啟 RLS 並限定 service_role 存取
+ALTER TABLE work_logs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.work_logs FROM anon;
+GRANT ALL ON public.work_logs TO service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
 ```
