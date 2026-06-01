@@ -30,7 +30,15 @@ pinned: false
 3.  **雲端生產環境安全機制**: 全面啟用 RLS 與僅限 Service Role 特權金鑰存取架構，示範企業級敏感資料保護標準。
 
 ---
+## 📸 實測截圖 (Product Screenshots)
 
+> **在此處貼上您的 Github 圖片網址或是將圖片放入 assets 資料夾中引用**
+
+| 智慧日誌分析與自動拆分 | 語意特化檢索與查詢重寫 |
+| :---: | :---: |
+| ![功能截圖 1](https://via.placeholder.com/400x600?text=Ingestion+Demo) | ![功能截圖 2](https://via.placeholder.com/400x600?text=Query+Demo) |
+
+---
 ## 🚀 系統架構 (Architecture)
 
 本系統部署於 **Hugging Face Spaces (Docker)**，展示了完整的混合路由設計：
@@ -74,10 +82,14 @@ graph TD
 ### 1. 非同步架構解耦 (System Resilience)
 為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，本計畫採用異步處理策略。在接收 Webhook 請求後，利用 `asyncio` 的執行緒池 (`run_in_executor`) 將耗時的「意圖分析 ➡️ 向量化 ➡️ DB 檢索 ➡️ 總結生成」完整流程移至背景處理，隨後即刻回傳 HTTP 200。這確保了系統的高可用性，並透過 `Push Message` 主動告知使用者結果，徹底克服逾時問題。
 
-### 2. 精準預分塊策略 (Advanced Pre-chunking)
+### 2. 查詢重寫與動態時間過濾 (Query Rewriting & Metadata Filtering)
+在檢索(Query)階段，若使用者輸入帶有時間副詞（如「之前...」、「上次...」），直接向量化會導致語義特徵被「時間口語詞」嚴重稀釋。本系統優化了 RAG 的檢索機制：首先利用 LLM 判斷查詢意圖，執行**查詢重寫 (Query Rewrite)** 拔除冗言贅字提煉純粹的技術語義；同時將時間副詞轉化為明確的 ISO 8601 時間區間。
+特別是在處理「之前」等極度模糊的時間描述時，LLM 會適當回傳 NULL 時間範圍，此時系統在 Application 層會自動補齊預設的安全時間軸（極大/極小值）來避免 SQL 報錯，落實了「時間 Metadata Filter 優先限縮範圍，乾淨 Query 進行 Vector Search 語意比對」的最佳實踐，大幅增強容錯能力。
+
+### 3. 精準預分塊策略 (Advanced Pre-chunking)
 面對使用者複合式的輸入（如：「早上研究架構，下午請假」），傳統 RAG 直接向量化會導致語意特徵互相干擾。本系統調用 LLM 的 **Structured Outputs**，在 Ingestion 階段即先進行語意拆分，確保每一筆寫入資料庫的向量都具備高純度，大幅提升後續 Cosine Similarity 檢索的精準度。
 
-### 3. 安全性雲端實踐 (Cloud Security)
+### 4. 安全性雲端實踐 (Cloud Security)
 本專案採用 Supabase **RLS (Row Level Security)** 預設封閉架構。透過 `REVOKE ALL ON ANON` 指令完全禁止前端直接存取，並限定 FastAPI 伺服器使用 `service_role` 特權金鑰進行操作，示範了如何保護敏感工作紀錄免於未經授權的存取風險。
 
 ---
