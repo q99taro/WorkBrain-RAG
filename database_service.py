@@ -22,7 +22,7 @@ def insert_log(user_id: str, content: str, embedding: list[float], event_time: s
     response = supabase.table("work_logs").insert(data).execute()
     return len(response.data) > 0
 
-def search_logs(user_id: str, query_embedding: list[float], start_time: str, end_time: str, top_k: int = 5, threshold: float = 0.7) -> list[dict]:
+def search_logs(user_id: str, query_embedding: list[float], start_time: str, end_time: str, top_k: int = 8, threshold: float = 0.7) -> list[dict]:
     response = supabase.rpc(
         "match_work_logs",
         {
