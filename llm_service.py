@@ -60,7 +60,7 @@ def analyze_intent(user_input: str) -> dict:
 輸出 JSON："""
     
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-3.1-flash-lite',
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -68,3 +68,20 @@ def analyze_intent(user_input: str) -> dict:
         ),
     )
     return json.loads(response.text)
+
+def generate_summary(user_query: str, logs: list[dict]) -> str:
+    logs_context = "\n".join([f"- [{log.get('event_time', 'unknown')}] {log.get('content')}" for log in logs])
+    
+    prompt = f"""你是一個專業的工作日誌分析助手。
+使用者想查詢："{user_query}"
+以下是從資料庫中檢索到的相關工作紀錄：
+{logs_context}
+
+請根據以上紀錄，為使用者總結他們的工作內容。如果有多筆紀錄，請條列式呈現，並保持口吻專業且親切。
+"""
+    
+    response = client.models.generate_content(
+        model='gemini-3.1-flash-lite',
+        contents=prompt
+    )
+    return response.text
