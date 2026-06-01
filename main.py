@@ -101,6 +101,14 @@ def async_rag_workflow(user_id: str, user_text: str):
                 )
             )
 
+@app.get("/")
+async def index():
+    return {"status": "working"}
+
+@app.post("/")
+async def index_post(request: Request, background_tasks: BackgroundTasks):
+    return await callback(request, background_tasks)
+
 @app.post("/callback")
 async def callback(request: Request, background_tasks: BackgroundTasks):
     signature = request.headers.get('X-Line-Signature', '')
