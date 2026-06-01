@@ -32,7 +32,7 @@ pinned: false
 ---
 ## 📸 實測截圖 (Product Screenshots)
 
-<img width="590" height="1278" alt="IMG_9563" src="https://github.com/user-attachments/assets/a511450a-5c05-4591-be61-ef8fb3365e36" />
+<img width="295" height="639" alt="IMG_9563" src="https://github.com/user-attachments/assets/a511450a-5c05-4591-be61-ef8fb3365e36" />
 
 ---
 ## 🚀 系統架構 (Architecture)
