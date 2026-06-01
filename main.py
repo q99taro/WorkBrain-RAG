@@ -44,9 +44,14 @@ def async_rag_workflow(user_id: str, user_text: str):
 
         if user_text.startswith(("log", "紀錄", "記錄")):
             intent = "log"
-            content_str = user_text[3:].strip()
+            prefix_len = 3 if user_text.lower().startswith("log") else 2
+            content_str = user_text[prefix_len:].strip()
             if content_str:
-                clean_contents = [content_str]
+                intent_data = llm_service.analyze_intent(content_str)
+                clean_contents = intent_data.get("clean_contents", [])
+                if not clean_contents:
+                    clean_contents = [content_str]
+                event_time = intent_data.get("event_time")
         elif user_text.startswith(("?", "？", "昨天", "上禮拜五")) or user_text.endswith(("什麼", "？", "?")):
             intent = "query"
             now = datetime.now()
