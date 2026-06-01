@@ -36,42 +36,41 @@ def async_rag_workflow(user_id: str, user_text: str):
     try:
         intent = "unknown"
         clean_content = user_text
+        clean_contents = []
         event_time = None
         query_start = None
         query_end = None
+        intent_data = {}
 
-        if user_text.startswith(("/log", "紀錄", "記錄")):
+        if user_text.startswith("log"):
             intent = "log"
-            clean_content = user_text.replace("/log", "").replace("紀錄", "").replace("記錄", "").strip()
-        elif user_text.startswith(("/query", "查詢", "?", "？")):
+            content_str = user_text[3:].strip()
+            if content_str:
+                clean_contents = [content_str]
+        elif user_text.startswith(("?", "？", "昨天", "上禮拜五")) or user_text.endswith(("什麼", "？", "?")):
             intent = "query"
             now = datetime.now()
             query_start = (now - timedelta(days=7)).isoformat()
             query_end = now.isoformat()
-            clean_content = user_text.replace("/query", "").replace("查詢", "").replace("?", "").replace("？", "").strip()
+            clean_content = user_text.replace("?", "").replace("？", "").replace("什麼", "").strip()
             if not clean_content:
-                clean_content = "我最近做了什麼"
+                clean_content = "我昨天做了什麼"
         else:
             intent_data = llm_service.analyze_intent(user_text)
             intent = intent_data.get("intent")
+            clean_contents = intent_data.get("clean_contents", [])
             clean_content = intent_data.get("clean_content", user_text)
             event_time = intent_data.get("event_time")
             query_start = intent_data.get("query_start_time")
             query_end = intent_data.get("query_end_time")
 
         if intent == "log":
-            # 1. 取得陣列，若沒有則使用空陣列作為防呆
-            clean_contents = intent_data.get("clean_contents", [])
-            event_time = intent_data.get("event_time")
-            
-            # 若規則判斷 (例如帶有 /log 前綴) 直接產出單一字串，需將其包裝為陣列
-            if isinstance(clean_contents, str):
-                clean_contents = [clean_contents]
+            if not clean_contents and intent_data:
+                clean_contents = intent_data.get("clean_contents", [])
                 
             success_count = 0
             fail_count = 0
 
-            # 2. 使用迴圈將每一筆獨立事件分別向量化並寫入
             for content in clean_contents:
                 vector = embedding_service.get_embedding(content, is_query=False)
                 
@@ -91,6 +90,8 @@ def async_rag_workflow(user_id: str, user_text: str):
                 reply_text = f"✅ 已成功為您記錄 {success_count} 筆工作項目。"
             elif success_count > 0 and fail_count > 0:
                 reply_text = f"⚠️ 部分記錄成功 ({success_count} 筆)，但有 {fail_count} 筆記錄失敗，請檢查資料庫狀態。"
+            elif success_count == 0 and fail_count == 0:
+                reply_text = "請輸入您要記錄的工作內容。"
             else:
                 reply_text = "❌ 記錄失敗，請檢查資料庫連線。"
 
