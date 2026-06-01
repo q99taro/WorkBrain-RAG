@@ -54,14 +54,14 @@ graph TD
 
 ## 💡 核心工程優化 (Engineering Highlights)
 
-### 1. 非同步架耦 (Async Background Tasks)
-為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，系統採用 FastAPI `BackgroundTasks` 機制。在接收請求的 0.1 秒內立即回傳 HTTP 200，將耗時的「意圖解析 ➡️ 向量計算 ➡️ 資料庫檢索 ➡️ LLM 生成」移至背景處理，達成 **0% 逾時失敗率**。
+### 1. 非同步架構解耦 (Async / Thread Pool)
+為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，在收到 Webhook 請求後會馬上利用 `asyncio` 的執行緒池 (`run_in_executor`) 移至背景處理，隨後系統在幾毫秒內回傳 HTTP 200，達成 **0% 逾時失敗率**。
 
 ### 2. 多重事件自動拆分 (Pre-chunking Strategy)
 當使用者輸入複合事件（如：「早上研究架構優化，下午請假」）時，系統透過 LLM 解析為結構化 JSON 陣列，後端以迴圈為每個獨立事件單獨生成 Embedding。這徹底消除語意稀釋，提升檢索精準度。
 
 ### 3. 規則與語意混合路由 (Hybrid Router)
-設計混合路由機制，優先攔截帶有指令符號（如 `log`, `?`）的輸入。針對明確指令直接於本地端處理，跳過不必要的 LLM 意圖分析階段，有效節省約 **50% 的 API 成本**。
+針對輸入前綴帶有單純問號（如 `?` 或 `？`）的快速查詢，直接於本地端推算預設時間範圍（如查詢前一天紀錄），跳過不必要的 LLM 成本；而輸入一般文字或 `log` 等指令則交由 LLM 處理精確的時間與意圖切割。
 
 ---
 
@@ -100,6 +100,39 @@ CREATE TABLE work_logs (
 
 -- 建立 HNSW 索引加速向量檢索
 CREATE INDEX ON work_logs USING hnsw (embedding vector_cosine_ops);
+
+-- 建立供程式呼叫的 RAG 檢索用的 RPC Function
+CREATE OR REPLACE FUNCTION match_work_logs (
+  query_embedding VECTOR(768),
+  match_threshold FLOAT,
+  match_count INT,
+  p_user_id TEXT,
+  p_start_time TIMESTAMPTZ DEFAULT NULL,
+  p_end_time TIMESTAMPTZ DEFAULT NULL
+) RETURNS TABLE (
+  id BIGINT,
+  content TEXT,
+  event_time TIMESTAMPTZ,
+  similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    work_logs.id,
+    work_logs.content,
+    work_logs.event_time,
+    1 - (work_logs.embedding <=> query_embedding) AS similarity
+  FROM work_logs
+  WHERE work_logs.user_id = p_user_id
+    AND work_logs.event_time >= p_start_time
+    AND work_logs.event_time <= p_end_time
+    AND 1 - (work_logs.embedding <=> query_embedding) > match_threshold
+  ORDER BY work_logs.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
 
 -- 賦予連線角色寫入與查詢權限
 GRANT SELECT, INSERT ON public.work_logs TO anon, authenticated, service_role;
