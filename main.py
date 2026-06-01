@@ -59,7 +59,9 @@ def async_rag_workflow(user_id: str, user_text: str):
             intent_data = llm_service.analyze_intent(user_text)
             intent = intent_data.get("intent")
             clean_contents = intent_data.get("clean_contents", [])
-            clean_content = intent_data.get("clean_content", user_text)
+            clean_content = intent_data.get("clean_content")
+            if not clean_content:
+                clean_content = user_text
             event_time = intent_data.get("event_time")
             query_start = intent_data.get("query_start_time")
             query_end = intent_data.get("query_end_time")

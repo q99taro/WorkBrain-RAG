@@ -10,7 +10,8 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 class IntentAnalysis(BaseModel):
     intent: str = Field(description="Must be 'log' for recording work, or 'query' for asking questions about past work.")
-    clean_content: List[str] = Field(description="The core content of the user's message, removing time adverbs.")
+    clean_contents: List[str] = Field(description="If log, the core content of the user's message, removing time adverbs.")
+    clean_content: str = Field(description="If query, the exact question the user is asking, removing time adverbs.", default="")
     event_time: Optional[str] = Field(description="If intent is 'log', extract the specific ISO 8601 time. Return null if not specified.")
     query_start_time: Optional[str] = Field(description="If intent is 'query', extract the start of the requested time range in ISO 8601 format.")
     query_end_time: Optional[str] = Field(description="If intent is 'query', extract the end of the requested time range in ISO 8601 format.")
@@ -30,6 +31,7 @@ def analyze_intent(user_input: str) -> dict:
 {{
   "intent": "log",
   "clean_contents": ["修正了登入異常的 Bug"],
+  "clean_content": "",
   "event_time": "2026-05-31T14:30:00+08:00",
   "query_start_time": null,
   "query_end_time": null
@@ -44,6 +46,7 @@ def analyze_intent(user_input: str) -> dict:
     "研究如何解決使用者問題不精確的問題",
     "下午請假"
   ],
+  "clean_content": "",
   "event_time": "2026-06-01T14:30:00+08:00",
   "query_start_time": null,
   "query_end_time": null
