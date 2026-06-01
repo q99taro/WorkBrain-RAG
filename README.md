@@ -1,3 +1,12 @@
+---
+title: Time-Aware Smart Work-Log RAG System
+emoji: 🤖
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # 🤖 Time-Aware Smart Work-Log RAG System
 > 專為個人工作日誌設計的智慧檢索與摘要系統，整合 LLM 意圖解析、語意分塊與非同步架構，解決真實 RAG 系統落地的常見痛點。
 
