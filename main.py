@@ -1,0 +1,123 @@
+import os
+import sys
+import asyncio
+from datetime import datetime, timedelta
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, PushMessageRequest, TextMessage
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+import embedding_service
+import database_service
+import llm_service
+
+load_dotenv()
+
+app = FastAPI()
+
+channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+channel_secret = os.getenv('LINE_CHANNEL_SECRET')
+
+if channel_access_token is None or channel_secret is None:
+    sys.exit(1)
+
+configuration = Configuration(access_token=channel_access_token)
+handler = WebhookHandler(channel_secret)
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def generate_summary_with_retry(user_query, logs):
+    return llm_service.generate_summary(user_query, logs)
+
+def async_rag_workflow(user_id: str, user_text: str):
+    reply_text = ""
+    try:
+        intent = "unknown"
+        clean_content = user_text
+        event_time = None
+        query_start = None
+        query_end = None
+
+        if user_text.startswith(("/log", "紀錄", "記錄")):
+            intent = "log"
+            clean_content = user_text.replace("/log", "").replace("紀錄", "").replace("記錄", "").strip()
+        elif user_text.startswith(("/query", "查詢", "?", "？")):
+            intent = "query"
+            now = datetime.now()
+            query_start = (now - timedelta(days=7)).isoformat()
+            query_end = now.isoformat()
+            clean_content = user_text.replace("/query", "").replace("查詢", "").replace("?", "").replace("？", "").strip()
+            if not clean_content:
+                clean_content = "我最近做了什麼"
+        else:
+            intent_data = llm_service.analyze_intent(user_text)
+            intent = intent_data.get("intent")
+            clean_content = intent_data.get("clean_content", user_text)
+            event_time = intent_data.get("event_time")
+            query_start = intent_data.get("query_start_time")
+            query_end = intent_data.get("query_end_time")
+
+        if intent == "log":
+            vector = embedding_service.get_embedding(clean_content, is_query=False)
+            success = database_service.insert_log(
+                user_id=user_id,
+                content=clean_content,
+                embedding=vector,
+                event_time=event_time
+            )
+            reply_text = "✅ 已成功為您記錄工作項目。" if success else "❌ 記錄失敗，請檢查資料庫連線。"
+
+        elif intent == "query":
+            vector = embedding_service.get_embedding(clean_content, is_query=True)
+            retrieved_logs = database_service.search_logs(
+                user_id=user_id,
+                query_embedding=vector,
+                start_time=query_start,
+                end_time=query_end,
+                top_k=30,
+                threshold=0.7
+            )
+            
+            if not retrieved_logs:
+                reply_text = "這段時間內沒有找到相關的工作紀錄喔。"
+            else:
+                reply_text = generate_summary_with_retry(clean_content, retrieved_logs)
+        
+        else:
+            reply_text = "抱歉，我無法辨識您的意圖，請明確告訴我您要記錄工作還是查詢日誌。"
+
+    except Exception as e:
+        reply_text = f"Error in RAG workflow: {str(e)}"
+        
+    finally:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=user_id,
+                    messages=[TextMessage(text=reply_text)]
+                )
+            )
+
+@app.post("/callback")
+async def callback(request: Request, background_tasks: BackgroundTasks):
+    signature = request.headers.get('X-Line-Signature', '')
+    body = await request.body()
+    body_str = body.decode('utf-8')
+
+    try:
+        handler.handle(body_str, signature)
+    except InvalidSignatureError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    return 'OK'
+
+@handler.add(MessageEvent, message=TextMessageContent)
+def handle_message(event):
+    user_id = event.source.user_id
+    user_text = event.message.text
+    
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, async_rag_workflow, user_id, user_text)
