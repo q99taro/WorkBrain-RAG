@@ -42,7 +42,7 @@ def async_rag_workflow(user_id: str, user_text: str):
         query_end = None
         intent_data = {}
 
-        if user_text.startswith("log"):
+        if user_text.startswith(("log", "紀錄", "記錄")):
             intent = "log"
             content_str = user_text[3:].strip()
             if content_str:
