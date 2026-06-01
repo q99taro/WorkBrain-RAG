@@ -103,12 +103,16 @@ def async_rag_workflow(user_id: str, user_text: str):
                 reply_text = "❌ 記錄失敗，請檢查資料庫連線。"
 
         elif intent == "query":
+            # 若 LLM 判定為模糊時間並回傳 None，給定極大的預設值以避免資料庫 RPC 對 NULL 比較時回傳 false
+            safe_query_start = query_start if query_start else "1970-01-01T00:00:00+00:00"
+            safe_query_end = query_end if query_end else "2100-01-01T23:59:59+00:00"
+            
             vector = embedding_service.get_embedding(clean_content, is_query=True)
             retrieved_logs = database_service.search_logs(
                 user_id=user_id,
                 query_embedding=vector,
-                start_time=query_start,
-                end_time=query_end,
+                start_time=safe_query_start,
+                end_time=safe_query_end,
                 top_k=10,
                 threshold=0.6
             )
