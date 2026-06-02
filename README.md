@@ -25,7 +25,7 @@ pinned: false
 
 在開發基於 LINE Bot 的 RAG 系統時，常面臨 **Webhook 應答逾時 (4.75s)** 與 **語意稀釋 (Semantic Dilution)** 的挑戰。本專案透過以下工程實踐解決問題：
 
-1.  **非同步架構優化 (System Resilience)**: 採用 Thread Pool 異步處理耗時 RAG 流程，達成 100% 成功應答率並解決 LINE 單次應答限制。
+1.  **背景執行緒解耦 (Thread Pool Decoupling)**: 採用執行緒池處理耗時的 RAG 同步流程，達成 100% 成功應答率並解決 LINE 單次應答限制。
 2.  **精準預分塊策略 (Pre-chunking Logic)**: 利用 LLM 結構化輸出功能，在 ingestion 階段即實現「按工作事件拆分」，解決複合語句引發的向量特徵稀釋。針對開發者日誌場景，內建對「技術術語與邏輯因果」的理解能力，能精確判斷如「移除 X 改用 Y」等技術細節，確保技術上下文的完整儲存而不被誤拆。
 3.  **雲端生產環境安全機制**: 全面啟用 RLS 與僅限 Service Role 特權金鑰存取架構，示範企業級敏感資料保護標準。
 
@@ -45,20 +45,23 @@ graph TD
     LineServer -->|2. Webhook POST| FastAPI[FastAPI Gateway]
     
     subgraph FastAPI Backend
-        FastAPI -->|3. Async Flow 解耦| Router{Hybrid Router}
-        Router -->|A. 前綴規則攔截| LocalProcess[Python 本地端處理]
+        FastAPI -->|3. 提交至 Thread Pool| MainWorkflow[RAG Workflow]
+        MainWorkflow -->|4. 意圖解析分支| Router{Hybrid Router}
+        
+        Router -->|A. 前綴規則攔截 (?/log)| LocalProcess[Python 本地端處理]
         Router -->|B. 自然語言輸入| Gemini[Gemini 3.1 Flash Lite API]
         
-        Gemini -->|4. Intent & Time JSON| MainWorkflow[RAG Workflow]
-        LocalProcess -->|4. 封裝陣列| MainWorkflow
+        Gemini -->|5. Intent & Time JSON| ProcessData[資料清洗]
+        LocalProcess -->|5. 封裝陣列| ProcessData
         
-        MainWorkflow -->|5. For 迴圈迭代分塊| EmbedModel[本地端 mE5-base Embedding]
+        ProcessData -->|6. 迴圈迭代分塊| EmbedModel[本地端 mE5-base Embedding]
     end
 
-    EmbedModel -->|6. 向量寫入 / 混合檢索| Supabase[(Supabase pgvector)]
-    Supabase -->|7. 歷史日誌回傳| MainWorkflow
-    MainWorkflow -->|8. 重排與條列摘要生成| Gemini
-    MainWorkflow -->|9. 非同步主動推播| LineServer
+    EmbedModel -->|回傳向量| MainWorkflow
+    MainWorkflow -->|7. 向量寫入 / 混合檢索| Supabase[(Supabase pgvector)]
+    Supabase -->|8. 歷史日誌回傳| MainWorkflow
+    MainWorkflow -->|9. 重排與摘要生成| Gemini
+    MainWorkflow -->|10. 主動推播訊息| LineServer
 ```
 
 ---
@@ -75,8 +78,8 @@ graph TD
 
 ## 💡 核心工程優化 (Engineering Highlights)
 
-### 1. 非同步架構解耦 (System Resilience)
-為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，本計畫採用異步處理策略。在接收 Webhook 請求後，利用 `asyncio` 的執行緒池 (`run_in_executor`) 將耗時的「意圖分析 ➡️ 向量化 ➡️ DB 檢索 ➡️ 總結生成」完整流程移至背景處理，隨後即刻回傳 HTTP 200。這確保了系統的高可用性，並透過 `Push Message` 主動告知使用者結果，徹底克服逾時問題。
+### 1. 背景執行緒解耦 (Thread Pool Decoupling)
+為解決 LINE Webhook 嚴格的 **4.75 秒** 應答限制，本計畫採用背景執行緒策略。在接收 Webhook 請求後，利用 `asyncio` 的執行緒池 (`loop.run_in_executor`) 將耗時的「同步 Blocking I/O」操作（意圖分析 ➡️ 向量化 ➡️ DB 檢索 ➡️ 總結生成）完整移至背景執行，隨後即刻回傳 HTTP 200。這避免了阻塞主線程的 Event Loop，確保了系統在多用戶併發下的高可用性，並透過 `Push Message` 主動告知使用者結果，徹底克服逾時問題。
 
 ### 2. 查詢重寫與動態時間過濾 (Query Rewriting & Metadata Filtering)
 在檢索(Query)階段，若使用者輸入帶有時間副詞（如「之前...」、「上次...」），直接向量化會導致語義特徵被「時間口語詞」嚴重稀釋。本系統優化了 RAG 的檢索機制：首先利用 LLM 判斷查詢意圖，執行**查詢重寫 (Query Rewrite)** 拔除冗言贅字提煉純粹的技術語義；同時將時間副詞轉化為明確的 ISO 8601 時間區間。

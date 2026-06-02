@@ -31,7 +31,7 @@ handler = WebhookHandler(channel_secret)
 def generate_summary_with_retry(user_query, logs):
     return llm_service.generate_summary(user_query, logs)
 
-def async_rag_workflow(user_id: str, user_text: str):
+def process_rag_workflow(user_id: str, user_text: str):
     reply_text = ""
     try:
         intent = "unknown"
@@ -165,4 +165,4 @@ def handle_message(event):
     user_text = event.message.text
     
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, async_rag_workflow, user_id, user_text)
+    loop.run_in_executor(None, process_rag_workflow, user_id, user_text)
