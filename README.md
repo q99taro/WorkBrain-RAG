@@ -46,13 +46,9 @@ graph TD
     
     subgraph FastAPI Backend
         FastAPI -->|3. 提交至 Thread Pool| MainWorkflow[RAG Workflow]
-        MainWorkflow -->|4. 意圖解析分支| Router{Hybrid Router}
-        
-        Router -->|A. 前綴規則攔截 (?/log)| LocalProcess[Python 本地端處理]
-        Router -->|B. 自然語言輸入| Gemini[Gemini 3.1 Flash Lite API]
+        MainWorkflow -->|4. 自然語言輸入| Gemini[Gemini 3.1 Flash Lite API]
         
         Gemini -->|5. Intent & Time JSON| ProcessData[資料清洗]
-        LocalProcess -->|5. 封裝陣列| ProcessData
         
         ProcessData -->|6. 迴圈迭代分塊| EmbedModel[本地端 mE5-base Embedding]
     end
