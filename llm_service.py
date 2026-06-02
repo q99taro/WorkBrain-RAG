@@ -49,7 +49,7 @@ def analyze_intent(user_input: str) -> dict:
   "intent": "log",
   "clean_contents": [
     "研究如何解決 embedding 不精確問題",
-    "下午請假"
+    "請假"
   ],
   "clean_content": "",
   "event_time": "2026-06-01T14:30:00+08:00",
