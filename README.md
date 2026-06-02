@@ -126,6 +126,9 @@ CREATE TABLE work_logs (
 -- 建立 HNSW 索引加速向量檢索
 CREATE INDEX ON work_logs USING hnsw (embedding vector_cosine_ops);
 
+-- 建立 user_id 與 event_time 的複合索引 (B-Tree) 以加速 MetaData 過濾與範圍查詢
+CREATE INDEX idx_work_logs_user_time ON work_logs (user_id, event_time);
+
 -- 建立供程式呼叫的 RAG 檢索用的 RPC Function
 CREATE OR REPLACE FUNCTION match_work_logs (
   query_embedding VECTOR(768),
