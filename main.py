@@ -95,7 +95,7 @@ def process_rag_workflow(user_id: str, user_text: str):
                 query_embedding=vector,
                 start_time=safe_query_start,
                 end_time=safe_query_end,
-                top_k=10,
+                top_k=30,
                 threshold=0.6
             )
             
